@@ -1,0 +1,22 @@
+from typing import List, Optional, Literal, Annotated
+from dataclasses import dataclass, field
+from langgraph.graph import StateGraph, END
+from uuid import UUID
+import operator
+
+@dataclass
+class GraphState:
+    query: str
+    conversation_id: str
+    messages: Annotated[List[dict], operator.add] = field(default_factory=list)
+    query_type: Optional[str] = None
+    retrieval_results: List[dict] = field(default_factory=list)
+    context: str = ""
+    answer: str = ""
+    confidence: Literal["high", "medium", "low", "fallback"] = "medium"
+    needs_clarification: bool = False
+    fallback_triggered: bool = False
+    retry_count: int = 0
+    model: str = ""
+    trace_id: Optional[str] = None
+    error: Optional[str] = None
