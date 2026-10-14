@@ -42,6 +42,14 @@ class QdrantStore:
                     distance=Distance.COSINE,
                 ),
             )
+        try:
+            self.client.create_payload_index(
+                collection_name=self.collection,
+                field_name="category",
+                field_schema="keyword",
+            )
+        except Exception:
+            pass
         self._ready = True
 
     def upsert(self, ids: List[str], vectors: List[List[float]], payloads: List[dict], batch_size: int = 64):
@@ -50,7 +58,7 @@ class QdrantStore:
             PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i])
             for i in range(len(ids))
         ]
-        self.client.upsert(collection_name=self.collection, points=points, batch_size=batch_size)
+        self.client.upsert(collection_name=self.collection, points=points)
 
     def search(self, vector: List[float], top_k: int = 20, filters: Optional[dict] = None) -> List[dict]:
         self._ensure_collection()
@@ -61,20 +69,50 @@ class QdrantStore:
                 conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
             qdrant_filter = Filter(must=conditions)
 
-        results = self.client.search(
-            collection_name=self.collection,
-            query_vector=vector,
-            limit=top_k,
-            query_filter=qdrant_filter,
-            with_payload=True,
-        )
+        # Support both new (query_points) and legacy (search) qdrant-client versions
+        try:
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection,
+                    query=vector,
+                    limit=top_k,
+                    query_filter=qdrant_filter,
+                    with_payload=True,
+                )
+                points = response.points
+            else:
+                points = self.client.search(
+                    collection_name=self.collection,
+                    query_vector=vector,
+                    limit=top_k,
+                    query_filter=qdrant_filter,
+                    with_payload=True,
+                )
+        except Exception:
+            # Fallback without filter if index is not ready or missing
+            if hasattr(self.client, "query_points"):
+                response = self.client.query_points(
+                    collection_name=self.collection,
+                    query=vector,
+                    limit=top_k,
+                    with_payload=True,
+                )
+                points = response.points
+            else:
+                points = self.client.search(
+                    collection_name=self.collection,
+                    query_vector=vector,
+                    limit=top_k,
+                    with_payload=True,
+                )
+
         return [
             {
                 "id": r.id,
                 "score": r.score,
                 "payload": r.payload,
             }
-            for r in results
+            for r in points
         ]
 
     def delete_by_document_id(self, document_id: str):

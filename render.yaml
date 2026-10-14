@@ -1,0 +1,58 @@
+services:
+  # -------------------------------------------------------------
+  # 1. FastAPI RAG Backend Service
+  # -------------------------------------------------------------
+  - type: web
+    name: enterprise-rag-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: MODEL_NAME
+        value: openai/gpt-oss-120b
+      - key: BACKEND_API_KEY
+        value: rag-secret-api-key-2026
+      - key: GROQ_API_KEY
+        sync: false
+      - key: POSTGRES_URL
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+
+  # -------------------------------------------------------------
+  # 2. Next.js Chatbot Frontend Service
+  # -------------------------------------------------------------
+  - type: web
+    name: enterprise-rag-frontend
+    runtime: node
+    plan: starter
+    rootDir: frontend
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: BACKEND_API_KEY
+        value: rag-secret-api-key-2026
+      - key: GROQ_API_KEY
+        sync: false
+      - key: POSTGRES_URL
+        sync: false
+      - key: BACKEND_API_URL
+        fromService:
+          type: web
+          name: enterprise-rag-backend
+          property: host
+      - key: AUTH_GOOGLE_ID
+        sync: false
+      - key: AUTH_GOOGLE_SECRET
+        sync: false

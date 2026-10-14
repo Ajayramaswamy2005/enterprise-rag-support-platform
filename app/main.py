@@ -8,7 +8,9 @@ from app.core.opik_tracker import init_opik
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    import anyio
+    import asyncio
+    asyncio.create_task(anyio.to_thread.run_sync(init_db))
     init_opik()
     yield
 

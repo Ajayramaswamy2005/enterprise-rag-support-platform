@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Auth
+    auth_enabled: bool = True
+    api_key: Optional[str] = "rag-secret-api-key-2026"
+    supabase_jwt_secret: Optional[str] = None
+
     # PostgreSQL
     postgres_url: str = "postgresql://postgres:postgres@localhost:5432/customer_support"
 
@@ -28,7 +33,7 @@ class Settings(BaseSettings):
 
     # Groq
     groq_api_key: Optional[str] = None
-    groq_model: str = "llama3-70b-8192"
+    groq_model: str = "openai/gpt-oss-120b"
     groq_max_tokens: int = 1024
     groq_temperature: float = 0.2
 

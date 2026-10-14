@@ -30,3 +30,10 @@ Thumbs.db
 
 # Opik / local data
 .opik/
+
+# Node / Frontend
+**/node_modules/
+**/.next/
+**/.env.local
+**/.env*.local
+pnpm-lock.yaml.old

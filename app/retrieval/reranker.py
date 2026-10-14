@@ -12,14 +12,15 @@ def get_reranker() -> CrossEncoder:
 
 class CrossEncoderReranker:
     def rerank(self, query: str, results: List[Dict], top_k: int | None = None) -> List[Dict]:
-        if not results:
+        valid_results = [r for r in results if r.get("chunk")]
+        if not valid_results:
             return []
         reranker = get_reranker()
-        pairs = [(query, r["chunk"]) for r in results]
+        pairs = [(query, str(r["chunk"])) for r in valid_results]
         scores = reranker.predict(pairs, show_progress_bar=False)
         scored = [
             {**r, "rerank_score": float(score)}
-            for r, score in zip(results, scores)
+            for r, score in zip(valid_results, scores)
         ]
         ranked = sorted(scored, key=lambda x: x["rerank_score"], reverse=True)
         top = top_k or settings.reranker_top_k

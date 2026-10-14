@@ -21,7 +21,11 @@ engine = create_engine(settings.postgres_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Could not connect to PostgreSQL database during init_db: %s", e)
 
 def get_db():
     db = SessionLocal()

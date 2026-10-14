@@ -13,7 +13,13 @@ from app.models.schemas import (
 from app.models.database import get_db
 from app.services.knowledge_service import KnowledgeService
 
-router = APIRouter(prefix="/knowledge", tags=["Knowledge Base"])
+from app.core.auth import get_current_user
+
+router = APIRouter(
+    prefix="/knowledge",
+    tags=["Knowledge Base"],
+    dependencies=[Depends(get_current_user)],
+)
 
 @router.post("/documents", response_model=IngestResponse, status_code=201)
 def create_document(payload: DocumentCreate, db: Session = Depends(get_db)):

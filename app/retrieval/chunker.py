@@ -1,4 +1,5 @@
 import re
+import uuid
 from typing import List, Dict
 
 class Chunker:
@@ -29,7 +30,7 @@ class Chunker:
         texts = self.split_text(content)
         return [
             {
-                "chunk_id": f"{document_id}-{i}",
+                "chunk_id": str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{document_id}-{i}")),
                 "document_id": document_id,
                 "title": title,
                 "chunk": text,
