@@ -6,7 +6,7 @@ services:
     name: enterprise-rag-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: starter
+    plan: free
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -31,7 +31,7 @@ services:
   - type: web
     name: enterprise-rag-frontend
     runtime: node
-    plan: starter
+    plan: free
     rootDir: frontend
     buildCommand: pnpm install && pnpm build
     startCommand: pnpm start
