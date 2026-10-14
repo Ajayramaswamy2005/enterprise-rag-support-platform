@@ -17,7 +17,13 @@ class Document(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-engine = create_engine(settings.postgres_url, future=True)
+db_url = settings.postgres_url
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+elif db_url.startswith("postgresql://") and "+psycopg" not in db_url:
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+engine = create_engine(db_url, future=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def init_db():
