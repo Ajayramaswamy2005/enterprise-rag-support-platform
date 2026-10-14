@@ -3,7 +3,7 @@ services:
   # 1. FastAPI RAG Backend Service
   # -------------------------------------------------------------
   - type: web
-    name: enterprise-rag-backend
+    name: ajay-rag-backend-2026
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
@@ -29,7 +29,7 @@ services:
   # 2. Next.js Chatbot Frontend Service
   # -------------------------------------------------------------
   - type: web
-    name: enterprise-rag-frontend
+    name: ajay-rag-frontend-2026
     runtime: node
     plan: free
     rootDir: frontend
@@ -50,7 +50,7 @@ services:
       - key: BACKEND_API_URL
         fromService:
           type: web
-          name: enterprise-rag-backend
+          name: ajay-rag-backend-2026
           property: host
       - key: AUTH_GOOGLE_ID
         sync: false
