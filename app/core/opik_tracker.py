@@ -32,4 +32,13 @@ def update_trace_metadata(metadata: dict):
     except Exception:
         pass
 
+def traced(name: str):
+    """Apply Opik's @track only when Opik is configured, so unconfigured
+    deployments don't try (and fail) to ship traces on every call."""
+    def decorator(fn):
+        if _opik_configured:
+            return track(name=name, project_name=settings.opik_project_name)(fn)
+        return fn
+    return decorator
+
 init_opik()

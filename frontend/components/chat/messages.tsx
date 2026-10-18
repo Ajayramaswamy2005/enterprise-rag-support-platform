@@ -4,38 +4,26 @@ import { useCallback, useEffect, useRef } from "react";
 import { useMessages } from "@/hooks/use-messages";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
 
 type MessagesProps = {
-  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
   status: UseChatHelpers<ChatMessage>["status"];
   votes: Vote[] | undefined;
   messages: ChatMessage[];
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
-  isArtifactVisible: boolean;
   isLoading?: boolean;
-  selectedModelId: string;
   onEditMessage?: (message: ChatMessage) => void;
 };
 
 function PureMessages({
-  addToolApprovalResponse,
   chatId,
   status,
   votes,
   messages,
-  setMessages,
-  regenerate,
   isReadonly,
-  isArtifactVisible,
   isLoading,
-  selectedModelId: _selectedModelId,
   onEditMessage,
 }: MessagesProps) {
   const {
@@ -43,13 +31,10 @@ function PureMessages({
     endRef: messagesEndRef,
     isAtBottom,
     scrollToBottom,
-    hasSentMessage,
     reset,
   } = useMessages({
     status,
   });
-
-  useDataStream();
 
   const prevChatIdRef = useRef(chatId);
   useEffect(() => {
@@ -64,24 +49,19 @@ function PureMessages({
   }, [scrollToBottom]);
 
   return (
-    <div className="relative flex-1 bg-background">
+    <div className="canvas-grid relative flex-1">
       {messages.length === 0 && !isLoading && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <Greeting />
         </div>
       )}
       <div
-        className={cn(
-          "absolute inset-0 touch-pan-y overflow-y-auto",
-          messages.length > 0 ? "bg-background" : "bg-transparent"
-        )}
+        className="absolute inset-0 touch-pan-y overflow-y-auto"
         ref={messagesContainerRef}
-        style={isArtifactVisible ? { scrollbarWidth: "none" } : undefined}
       >
-        <div className="mx-auto flex min-h-full min-w-0 max-w-4xl flex-col gap-5 px-2 py-6 md:gap-7 md:px-4">
+        <div className="mx-auto flex min-h-full min-w-0 max-w-3xl flex-col gap-6 px-3 py-8 md:gap-9 md:px-6">
           {messages.map((message, index) => (
             <PreviewMessage
-              addToolApprovalResponse={addToolApprovalResponse}
               chatId={chatId}
               isLoading={
                 status === "streaming" && messages.length - 1 === index
@@ -90,11 +70,6 @@ function PureMessages({
               key={message.id}
               message={message}
               onEdit={onEditMessage}
-              regenerate={regenerate}
-              requiresScrollPadding={
-                hasSentMessage && index === messages.length - 1
-              }
-              setMessages={setMessages}
               vote={
                 votes
                   ? votes.find((vote) => vote.messageId === message.id)

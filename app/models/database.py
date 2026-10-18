@@ -23,7 +23,8 @@ if db_url.startswith("postgres://"):
 elif db_url.startswith("postgresql://") and "+psycopg" not in db_url:
     db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 
-engine = create_engine(db_url, future=True)
+# pool_pre_ping recovers from connections dropped by managed Postgres (e.g. Render, Supabase)
+engine = create_engine(db_url, future=True, pool_pre_ping=True, connect_args={"connect_timeout": 5})
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 def init_db():

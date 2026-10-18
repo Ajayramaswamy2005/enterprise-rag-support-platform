@@ -9,7 +9,9 @@ class DenseRetriever:
     def search(self, query: str, top_k: int = 20, filters: Dict | None = None) -> List[Dict]:
         try:
             vector = embed_text(query)
-            results = self.store.search(vector=vector, top_k=top_k, filters=filters)
+            # Chunk metadata is stored nested under the "metadata" payload key
+            qdrant_filters = {f"metadata.{k}": v for k, v in filters.items()} if filters else None
+            results = self.store.search(vector=vector, top_k=top_k, filters=qdrant_filters)
             return [
                 {
                     "id": r["id"],

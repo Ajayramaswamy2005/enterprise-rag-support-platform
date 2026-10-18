@@ -4,10 +4,18 @@ import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { DUMMY_PASSWORD } from "@/lib/constants";
-import { createGuestUser, getUser } from "@/lib/db/queries";
+import {
+  createGuestUser,
+  getOrCreateGoogleUser,
+  getUser,
+} from "@/lib/db/queries";
 import { authConfig } from "./auth.config";
 
 export type UserType = "guest" | "regular";
+
+const googleClientId = process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret =
+  process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET;
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -39,18 +47,28 @@ export const {
 } = NextAuth({
   ...authConfig,
   callbacks: {
-    async signIn({ user, account }) {
-      if (account?.provider === "google" && user.email) {
-        try {
-          const { getOrCreateGoogleUser } = await import("@/lib/db/queries");
-          const dbUser = await getOrCreateGoogleUser(user.email, user.name, user.image);
-          user.id = dbUser.id;
-          user.type = "regular";
-        } catch (error) {
-          console.error("Error creating Google user:", error);
-        }
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== "google") {
+        return true;
       }
-      return true;
+      // Accounts are matched by email, so only trust addresses Google verified
+      if (!user.email || profile?.email_verified !== true) {
+        return false;
+      }
+      try {
+        const dbUser = await getOrCreateGoogleUser(
+          user.email,
+          user.name,
+          user.image
+        );
+        // The session must carry our database id, not Google's account id
+        user.id = dbUser.id;
+        user.type = "regular";
+        return true;
+      } catch (error) {
+        console.error("Error creating Google user:", error);
+        return false;
+      }
     },
     jwt({ token, user }) {
       if (user) {
@@ -70,11 +88,17 @@ export const {
     },
   },
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID || "google-client-id",
-      clientSecret: process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET || "google-client-secret",
-      allowDangerousEmailAccountLinking: true,
-    }),
+    // Only offer Google when real OAuth credentials exist; placeholder values
+    // make Google reject every sign-in attempt
+    ...(googleClientId && googleClientSecret
+      ? [
+          Google({
+            allowDangerousEmailAccountLinking: true,
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+          }),
+        ]
+      : []),
     Credentials({
       async authorize(credentials) {
         const email = String(credentials.email ?? "");

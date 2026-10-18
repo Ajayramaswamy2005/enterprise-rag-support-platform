@@ -1,7 +1,6 @@
 "use server";
 
 import { generateText, type UIMessage } from "ai";
-import { cookies } from "next/headers";
 import { auth } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { titleModel } from "@/lib/ai/models";
@@ -15,28 +14,44 @@ import {
 } from "@/lib/db/queries";
 import { getTextFromMessage } from "@/lib/utils";
 
-export async function saveChatModelAsCookie(model: string) {
-  const cookieStore = await cookies();
-  cookieStore.set("chat-model", model);
-}
-
 export async function generateTitleFromUserMessage({
   message,
 }: {
   message: UIMessage;
 }) {
-  const { text } = await generateText({
-    instructions: titlePrompt,
-    model: getTitleModel() as any,
-    prompt: getTextFromMessage(message),
-    providerOptions: {
-      gateway: { order: titleModel.gatewayOrder },
-    },
-  });
-  return text
-    .replace(/^[#*"\s]+/, "")
-    .replace(/["]+$/, "")
-    .trim();
+  const messageText = getTextFromMessage(message);
+  const fallbackTitle = deriveTitle(messageText);
+
+  // Titles are cosmetic: without an LLM key on the frontend, derive one locally
+  if (!process.env.GROQ_API_KEY && !process.env.AI_GATEWAY_API_KEY) {
+    return fallbackTitle;
+  }
+
+  try {
+    const { text } = await generateText({
+      instructions: titlePrompt,
+      model: getTitleModel() as any,
+      prompt: messageText,
+      providerOptions: {
+        gateway: { order: titleModel.gatewayOrder },
+      },
+    });
+    const title = text
+      .replace(/^[#*"\s]+/, "")
+      .replace(/["]+$/, "")
+      .trim();
+    return title || fallbackTitle;
+  } catch {
+    return fallbackTitle;
+  }
+}
+
+function deriveTitle(text: string) {
+  const firstLine = text.trim().split("\n")[0].replace(/[?!.]+$/, "");
+  if (!firstLine) {
+    return "New conversation";
+  }
+  return firstLine.length > 48 ? `${firstLine.slice(0, 45).trimEnd()}…` : firstLine;
 }
 
 export async function deleteTrailingMessages({ id }: { id: string }) {

@@ -1,50 +1,36 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { useEffect } from "react";
-import { useDataStream } from "@/components/chat/data-stream-provider";
+import { useEffect, useRef } from "react";
 import type { ChatMessage } from "@/lib/types";
 
 export type UseAutoResumeParams = {
   autoResume: boolean;
+  chatId: string;
   initialMessages: ChatMessage[];
   resumeStream: UseChatHelpers<ChatMessage>["resumeStream"];
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
 };
 
+/**
+ * If a chat was left mid-answer (last stored message is the user's), try to
+ * resume the in-flight stream once. Requires REDIS_URL for resumable streams.
+ */
 export function useAutoResume({
   autoResume,
+  chatId,
   initialMessages,
   resumeStream,
-  setMessages,
 }: UseAutoResumeParams) {
-  const { dataStream } = useDataStream();
+  const resumedChatId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!autoResume) {
+    if (!autoResume || resumedChatId.current === chatId) {
       return;
     }
+    resumedChatId.current = chatId;
 
-    const mostRecentMessage = initialMessages.at(-1);
-
-    if (mostRecentMessage?.role === "user") {
+    if (initialMessages.at(-1)?.role === "user") {
       resumeStream();
     }
-  }, [autoResume, initialMessages.at, resumeStream]);
-
-  useEffect(() => {
-    if (!dataStream) {
-      return;
-    }
-    if (dataStream.length === 0) {
-      return;
-    }
-
-    const [dataPart] = dataStream;
-
-    if (dataPart.type === "data-appendMessage") {
-      const message = JSON.parse(dataPart.data);
-      setMessages([...initialMessages, message]);
-    }
-  }, [dataStream, initialMessages, setMessages]);
+  }, [autoResume, chatId, initialMessages, resumeStream]);
 }

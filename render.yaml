@@ -7,15 +7,24 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
-    healthCheckPath: /health
-    autoDeploy: true
+    # Cheap liveness probe; /health checks every dependency and can be slow
+    healthCheckPath: /healthz
+    # Deploy on push to main only after the GitHub Actions CI checks pass
+    autoDeployTrigger: checksPass
+    # Frontend-only commits don't rebuild the backend image
+    buildFilter:
+      paths:
+        - app/**
+        - Dockerfile
+        - requirements.txt
     envVars:
       - key: PORT
         value: 8000
       - key: MODEL_NAME
         value: openai/gpt-oss-120b
+      # Generated once by Render and shared with the frontend below; never commit it
       - key: BACKEND_API_KEY
-        value: rag-secret-api-key-2026
+        generateValue: true
       - key: GROQ_API_KEY
         sync: false
       - key: POSTGRES_URL
@@ -35,23 +44,26 @@ services:
     rootDir: frontend
     buildCommand: pnpm install && pnpm build
     startCommand: pnpm start
-    autoDeploy: true
+    autoDeployTrigger: checksPass
     envVars:
       - key: NODE_VERSION
         value: 20
       - key: AUTH_SECRET
         generateValue: true
       - key: BACKEND_API_KEY
-        value: rag-secret-api-key-2026
+        fromService:
+          type: web
+          name: ajay-rag-backend-2026
+          envVarKey: BACKEND_API_KEY
+      # Public URL: free-tier services can't receive private-network traffic,
+      # so the internal hostname (fromService.property: host) doesn't work here
+      - key: BACKEND_API_URL
+        value: https://ajay-rag-backend-2026.onrender.com
+      # Optional: only used to generate chat titles
       - key: GROQ_API_KEY
         sync: false
       - key: POSTGRES_URL
         sync: false
-      - key: BACKEND_API_URL
-        fromService:
-          type: web
-          name: ajay-rag-backend-2026
-          property: host
       - key: AUTH_GOOGLE_ID
         sync: false
       - key: AUTH_GOOGLE_SECRET

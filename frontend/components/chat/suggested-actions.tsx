@@ -3,7 +3,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { motion } from "framer-motion";
 import { memo, useCallback } from "react";
-import { suggestions } from "@/lib/constants";
+import { suggestedQuestions } from "@/lib/constants";
 import type { ChatMessage } from "@/lib/types";
 import { Suggestion } from "../ai-elements/suggestion";
 import type { VisibilityType } from "./visibility-selector";
@@ -15,7 +15,6 @@ type SuggestedActionsProps = {
 };
 
 function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
-  const suggestedActions = suggestions;
   const handleSuggestionClick = useCallback(
     (suggestion: string) => {
       window.history.pushState(
@@ -41,13 +40,13 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
         WebkitOverflowScrolling: "touch",
       }}
     >
-      {suggestedActions.map((suggestedAction, index) => (
+      {suggestedQuestions.map(({ category, text }, index) => (
         <motion.div
           animate={{ opacity: 1, y: 0 }}
           className="min-w-[200px] shrink-0 sm:min-w-0 sm:shrink"
           exit={{ opacity: 0, y: 16 }}
           initial={{ opacity: 0, y: 16 }}
-          key={suggestedAction}
+          key={text}
           transition={{
             delay: 0.06 * index,
             duration: 0.4,
@@ -55,11 +54,17 @@ function PureSuggestedActions({ chatId, sendMessage }: SuggestedActionsProps) {
           }}
         >
           <Suggestion
-            className="h-auto w-full whitespace-nowrap rounded-xl border border-border/50 bg-card/30 px-4 py-3 text-left text-[12px] leading-relaxed text-muted-foreground transition-all duration-200 sm:whitespace-normal sm:p-4 sm:text-[13px] hover:-translate-y-0.5 hover:bg-card/60 hover:text-foreground hover:shadow-[var(--shadow-card)]"
+            className="group/suggestion flex h-auto w-full flex-col items-start gap-1.5 whitespace-nowrap rounded-md border border-border/70 bg-card/80 px-3.5 py-3 text-left font-normal shadow-[var(--shadow-card)] backdrop-blur-sm transition-all duration-200 sm:whitespace-normal hover:-translate-y-0.5 hover:border-foreground/25 hover:bg-card hover:shadow-[var(--shadow-float)]"
             onClick={handleSuggestionClick}
-            suggestion={suggestedAction}
+            suggestion={text}
+            variant="ghost"
           >
-            {suggestedAction}
+            <span className="font-label text-muted-foreground/70 transition-colors group-hover/suggestion:text-signal">
+              {category}
+            </span>
+            <span className="text-[13px] text-foreground/85 leading-snug">
+              {text}
+            </span>
           </Suggestion>
         </motion.div>
       ))}

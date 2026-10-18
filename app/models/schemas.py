@@ -37,7 +37,7 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class DocumentCreate(BaseModel):
-    title: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1, max_length=512)
     content: str = Field(..., min_length=1)
     metadata: dict = Field(default_factory=dict)
 
@@ -50,13 +50,18 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
 
 class DocumentUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=512)
     content: Optional[str] = None
     metadata: Optional[dict] = None
 
 class DocumentList(BaseModel):
     items: List[DocumentResponse]
     total: int
+
+class KnowledgeStats(BaseModel):
+    documents: int
+    sparse_chunks: int
+    vectors: Optional[int] = None
 
 class IngestResponse(BaseModel):
     document_id: UUID

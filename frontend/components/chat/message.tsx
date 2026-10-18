@@ -1,183 +1,50 @@
 "use client";
-import type { UseChatHelpers } from "@ai-sdk/react";
-import { useCallback } from "react";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { MessageContent, MessageResponse } from "../ai-elements/message";
-import { Shimmer } from "../ai-elements/shimmer";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "../ai-elements/tool";
-import { useDataStream } from "./data-stream-provider";
-import { DocumentToolResult } from "./document";
-import { DocumentPreview } from "./document-preview";
-import { SparklesIcon } from "./icons";
+import { BrandMark } from "../rag/brand-mark";
+import { PipelineTracker } from "../rag/pipeline-tracker";
+import { RagAnswerMeta } from "../rag/source-cards";
 import { MessageActions } from "./message-actions";
-import { MessageReasoning } from "./message-reasoning";
-import { PreviewAttachment } from "./preview-attachment";
-import { Weather } from "./weather";
-
-function WaitingText() {
-  const { waitingStatus } = useDataStream();
-  const waitingText = waitingStatus?.message ?? "Waiting...";
-
-  return (
-    <div className="flex min-h-[calc(13px*1.65)] min-w-0 items-center text-[13px] leading-[1.65]">
-      <Shimmer
-        as="span"
-        className="font-medium whitespace-normal break-words"
-        duration={1}
-      >
-        {waitingText}
-      </Shimmer>
-    </div>
-  );
-}
-
-function ToolApprovalActions({
-  addToolApprovalResponse,
-  approvalId,
-}: {
-  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
-  approvalId: string;
-}) {
-  const handleDeny = useCallback(() => {
-    addToolApprovalResponse({
-      approved: false,
-      id: approvalId,
-      reason: "User denied weather lookup",
-    });
-  }, [addToolApprovalResponse, approvalId]);
-
-  const handleAllow = useCallback(() => {
-    addToolApprovalResponse({
-      approved: true,
-      id: approvalId,
-    });
-  }, [addToolApprovalResponse, approvalId]);
-
-  return (
-    <div className="flex items-center justify-end gap-2 border-t px-4 py-3">
-      <button
-        className="rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground"
-        onClick={handleDeny}
-        type="button"
-      >
-        Deny
-      </button>
-      <button
-        className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-sm transition-colors hover:bg-primary/90"
-        onClick={handleAllow}
-        type="button"
-      >
-        Allow
-      </button>
-    </div>
-  );
-}
 
 const PurePreviewMessage = ({
-  addToolApprovalResponse,
   chatId,
   message,
   vote,
   isLoading,
-  setMessages: _setMessages,
-  regenerate: _regenerate,
   isReadonly,
-  requiresScrollPadding: _requiresScrollPadding,
   onEdit,
 }: {
-  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
   message: ChatMessage;
   vote: Vote | undefined;
   isLoading: boolean;
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
-  requiresScrollPadding: boolean;
   onEdit?: (message: ChatMessage) => void;
 }) => {
-  const attachmentsFromMessage = message.parts.filter(
-    (part) => part.type === "file"
-  );
-
-  useDataStream();
-
   const isUser = message.role === "user";
   const isAssistant = message.role === "assistant";
 
   const hasAnyContent = message.parts?.some(
-    (part) =>
-      (part.type === "text" && part.text?.trim().length > 0) ||
-      (part.type === "reasoning" &&
-        "text" in part &&
-        part.text?.trim().length > 0) ||
-      part.type.startsWith("tool-")
+    (part) => part.type === "text" && part.text?.trim().length > 0
   );
   const isThinking = isAssistant && isLoading && !hasAnyContent;
-
-  const attachments = attachmentsFromMessage.length > 0 && (
-    <div
-      className="flex flex-row justify-end gap-2"
-      data-testid={"message-attachments"}
-    >
-      {attachmentsFromMessage.map((attachment) => (
-        <PreviewAttachment
-          attachment={{
-            contentType: attachment.mediaType,
-            name: attachment.filename ?? "file",
-            url: attachment.url,
-          }}
-          key={attachment.url}
-        />
-      ))}
-    </div>
-  );
-
-  const mergedReasoning = message.parts?.reduce(
-    (acc, part) => {
-      if (part.type === "reasoning" && part.text?.trim().length > 0) {
-        return {
-          isStreaming: "state" in part ? part.state === "streaming" : false,
-          rendered: false,
-          text: acc.text ? `${acc.text}\n\n${part.text}` : part.text,
-        };
-      }
-      return acc;
-    },
-    { isStreaming: false, rendered: false, text: "" }
-  ) ?? { isStreaming: false, rendered: false, text: "" };
 
   const parts = message.parts?.map((part, index) => {
     const { type } = part;
     const key = `message-${message.id}-part-${index}`;
 
-    if (type === "reasoning") {
-      if (!mergedReasoning.rendered && mergedReasoning.text) {
-        mergedReasoning.rendered = true;
-        return (
-          <MessageReasoning
-            isLoading={isLoading || mergedReasoning.isStreaming}
-            key={key}
-            reasoning={mergedReasoning.text}
-          />
-        );
-      }
+    if (type === "data-rag-meta") {
+      // Rendered after the answer text, below
       return null;
     }
 
     if (type === "text") {
       return (
         <MessageContent
-          className={cn("text-[13px] leading-[1.65]", {
-            "w-fit max-w-[min(80%,56ch)] overflow-hidden break-words rounded-2xl rounded-br-lg border border-border/30 bg-gradient-to-br from-secondary to-muted px-3.5 py-2 shadow-[var(--shadow-card)]":
+          className={cn("text-[14px] leading-[1.7]", {
+            "w-fit max-w-[min(85%,60ch)] overflow-hidden break-words rounded-lg rounded-br-sm bg-primary px-3.5 py-2 text-primary-foreground shadow-[var(--shadow-card)] [&_a]:text-primary-foreground [&_code]:text-primary-foreground":
               message.role === "user",
           })}
           data-testid="message-content"
@@ -185,156 +52,6 @@ const PurePreviewMessage = ({
         >
           <MessageResponse>{sanitizeText(part.text)}</MessageResponse>
         </MessageContent>
-      );
-    }
-
-    if (type === "tool-getWeather") {
-      const { toolCallId, state } = part;
-      const approvalId = (part as { approval?: { id: string } }).approval?.id;
-      const isDenied =
-        state === "output-denied" ||
-        (state === "approval-responded" &&
-          (part as { approval?: { approved?: boolean } }).approval?.approved ===
-            false);
-      const widthClass = "w-[min(100%,450px)]";
-
-      if (state === "output-available") {
-        return (
-          <div className={widthClass} key={toolCallId}>
-            <Weather weatherAtLocation={part.output} />
-          </div>
-        );
-      }
-
-      if (isDenied) {
-        return (
-          <div className={widthClass} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state="output-denied" type="tool-getWeather" />
-              <ToolContent>
-                <div className="px-4 py-3 text-muted-foreground text-sm">
-                  Weather lookup was denied.
-                </div>
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
-      if (state === "approval-responded") {
-        return (
-          <div className={widthClass} key={toolCallId}>
-            <Tool className="w-full" defaultOpen={true}>
-              <ToolHeader state={state} type="tool-getWeather" />
-              <ToolContent>
-                <ToolInput input={part.input} />
-              </ToolContent>
-            </Tool>
-          </div>
-        );
-      }
-
-      return (
-        <div className={widthClass} key={toolCallId}>
-          <Tool className="w-full" defaultOpen={true}>
-            <ToolHeader state={state} type="tool-getWeather" />
-            <ToolContent>
-              {(state === "input-available" ||
-                state === "approval-requested") && (
-                <ToolInput input={part.input} />
-              )}
-              {state === "approval-requested" && approvalId && (
-                <ToolApprovalActions
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  approvalId={approvalId}
-                />
-              )}
-            </ToolContent>
-          </Tool>
-        </div>
-      );
-    }
-
-    if (type === "tool-createDocument") {
-      const { toolCallId } = part;
-
-      if (part.output && "error" in part.output) {
-        return (
-          <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
-            key={toolCallId}
-          >
-            Error creating document: {String(part.output.error)}
-          </div>
-        );
-      }
-
-      return (
-        <DocumentPreview
-          isReadonly={isReadonly}
-          key={toolCallId}
-          result={part.output}
-        />
-      );
-    }
-
-    if (type === "tool-updateDocument") {
-      const { toolCallId } = part;
-
-      if (part.output && "error" in part.output) {
-        return (
-          <div
-            className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
-            key={toolCallId}
-          >
-            Error updating document: {String(part.output.error)}
-          </div>
-        );
-      }
-
-      return (
-        <div className="relative" key={toolCallId}>
-          <DocumentPreview
-            args={{ ...part.output, isUpdate: true }}
-            isReadonly={isReadonly}
-            result={part.output}
-          />
-        </div>
-      );
-    }
-
-    if (type === "tool-requestSuggestions") {
-      const { toolCallId, state } = part;
-
-      return (
-        <Tool
-          className="w-[min(100%,450px)]"
-          defaultOpen={true}
-          key={toolCallId}
-        >
-          <ToolHeader state={state} type="tool-requestSuggestions" />
-          <ToolContent>
-            {state === "input-available" && <ToolInput input={part.input} />}
-            {state === "output-available" && (
-              <ToolOutput
-                errorText={undefined}
-                output={
-                  "error" in part.output ? (
-                    <div className="rounded border p-2 text-red-500">
-                      Error: {String(part.output.error)}
-                    </div>
-                  ) : (
-                    <DocumentToolResult
-                      isReadonly={isReadonly}
-                      result={part.output}
-                      type="request-suggestions"
-                    />
-                  )
-                }
-              />
-            )}
-          </ToolContent>
-        </Tool>
       );
     }
 
@@ -352,12 +69,22 @@ const PurePreviewMessage = ({
     />
   );
 
+  const ragMeta = message.parts.find((part) => part.type === "data-rag-meta");
+
   const content = isThinking ? (
-    <WaitingText />
+    <PipelineTracker />
   ) : (
     <>
-      {attachments}
       {parts}
+      {isAssistant && !isLoading && !hasAnyContent && (
+        <p className="text-[13px] text-muted-foreground italic">
+          No answer was generated. The backend may have hit an error — try
+          sending the question again.
+        </p>
+      )}
+      {isAssistant && ragMeta && !isLoading && (
+        <RagAnswerMeta meta={ragMeta.data} />
+      )}
       {actions}
     </>
   );
@@ -377,10 +104,8 @@ const PurePreviewMessage = ({
         )}
       >
         {isAssistant && (
-          <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-            <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-              <SparklesIcon size={13} />
-            </div>
+          <div className="flex h-[calc(14px*1.7)] shrink-0 items-center">
+            <BrandMark size={24} />
           </div>
         )}
         {isAssistant ? (
@@ -402,13 +127,11 @@ export const ThinkingMessage = () => (
     data-testid="message-assistant-loading"
   >
     <div className="flex items-start gap-3">
-      <div className="flex h-[calc(13px*1.65)] shrink-0 items-center">
-        <div className="flex size-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-          <SparklesIcon size={13} />
-        </div>
+      <div className="flex h-[calc(14px*1.7)] shrink-0 items-center">
+        <BrandMark size={24} />
       </div>
 
-      <WaitingText />
+      <PipelineTracker />
     </div>
   </div>
 );

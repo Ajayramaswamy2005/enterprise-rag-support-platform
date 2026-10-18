@@ -1,32 +1,16 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useActiveChat } from "@/hooks/use-active-chat";
-import {
-  initialArtifactData,
-  useArtifact,
-  useArtifactSelector,
-} from "@/hooks/use-artifact";
-import type { Attachment, ChatMessage } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { Artifact } from "./artifact";
+import type { ChatMessage } from "@/lib/types";
 import { ChatHeader } from "./chat-header";
-import { DataStreamHandler } from "./data-stream-handler";
 import { submitEditedMessage } from "./message-editor";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 
 export function ChatShell() {
+  const pathname = usePathname();
   const {
     chatId,
     messages,
@@ -35,25 +19,17 @@ export function ChatShell() {
     status,
     stop,
     regenerate,
-    addToolApprovalResponse,
     input,
     setInput,
     visibilityType,
     isReadonly,
     isLoading,
     votes,
-    currentModelId,
-    setCurrentModelId,
-    showCreditCardAlert,
-    setShowCreditCardAlert,
   } = useActiveChat();
 
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(
     null
   );
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
-  const { setArtifact } = useArtifact();
 
   const stopRef = useRef(stop);
   stopRef.current = stop;
@@ -63,11 +39,9 @@ export function ChatShell() {
     if (prevChatIdRef.current !== chatId) {
       prevChatIdRef.current = chatId;
       stopRef.current();
-      setArtifact(initialArtifactData);
       setEditingMessage(null);
-      setAttachments([]);
     }
-  }, [chatId, setArtifact]);
+  }, [chatId]);
 
   const handleEditMessage = useCallback(
     (msg: ChatMessage) => {
@@ -102,115 +76,52 @@ export function ChatShell() {
     setInput("");
   }, [editingMessage, input, regenerate, setInput, setMessages]);
 
-  const handleActivateGateway = useCallback(() => {
-    window.open(
-      "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card",
-      "_blank"
-    );
-    window.location.href = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/`;
-  }, []);
+  // Non-chat pages (e.g. the knowledge base) render as layout children instead
+  if (pathname.startsWith("/knowledge")) {
+    return null;
+  }
 
   return (
-    <>
-      <div className="flex h-dvh w-full flex-row overflow-hidden">
-        <div
-          className={cn(
-            "flex min-w-0 flex-col bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-            isArtifactVisible ? "w-[40%]" : "w-full"
-          )}
-        >
-          <ChatHeader
+    <div className="flex h-dvh w-full flex-row overflow-hidden">
+      <div className="flex w-full min-w-0 flex-col bg-sidebar">
+        <ChatHeader
+          chatId={chatId}
+          isReadonly={isReadonly}
+          selectedVisibilityType={visibilityType}
+        />
+
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background md:rounded-tl-xl md:border-t md:border-l md:border-border/70">
+          <Messages
             chatId={chatId}
+            isLoading={isLoading}
             isReadonly={isReadonly}
-            selectedVisibilityType={visibilityType}
+            messages={messages}
+            onEditMessage={handleEditMessage}
+            status={status}
+            votes={votes}
           />
 
-          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background md:rounded-tl-[12px] md:border-t md:border-l md:border-border/40">
-            <Messages
-              addToolApprovalResponse={addToolApprovalResponse}
-              chatId={chatId}
-              isArtifactVisible={isArtifactVisible}
-              isLoading={isLoading}
-              isReadonly={isReadonly}
-              messages={messages}
-              onEditMessage={handleEditMessage}
-              regenerate={regenerate}
-              selectedModelId={currentModelId}
-              setMessages={setMessages}
-              status={status}
-              votes={votes}
-            />
-
-            <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
-              {!isReadonly && (
-                <MultimodalInput
-                  attachments={attachments}
-                  chatId={chatId}
-                  editingMessage={editingMessage}
-                  input={input}
-                  isLoading={isLoading}
-                  messages={messages}
-                  onCancelEdit={handleCancelEdit}
-                  onModelChange={setCurrentModelId}
-                  selectedModelId={currentModelId}
-                  selectedVisibilityType={visibilityType}
-                  sendMessage={
-                    editingMessage ? handleSendEditedMessage : sendMessage
-                  }
-                  setAttachments={setAttachments}
-                  setInput={setInput}
-                  setMessages={setMessages}
-                  status={status}
-                  stop={stop}
-                />
-              )}
-            </div>
+          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-3xl gap-2 border-t-0 bg-gradient-to-t from-background via-background/95 to-transparent px-3 pt-6 pb-3 md:px-6 md:pb-5">
+            {!isReadonly && (
+              <MultimodalInput
+                chatId={chatId}
+                editingMessage={editingMessage}
+                input={input}
+                isLoading={isLoading}
+                messages={messages}
+                onCancelEdit={handleCancelEdit}
+                selectedVisibilityType={visibilityType}
+                sendMessage={
+                  editingMessage ? handleSendEditedMessage : sendMessage
+                }
+                setInput={setInput}
+                status={status}
+                stop={stop}
+              />
+            )}
           </div>
         </div>
-
-        <Artifact
-          addToolApprovalResponse={addToolApprovalResponse}
-          attachments={attachments}
-          chatId={chatId}
-          input={input}
-          isReadonly={isReadonly}
-          messages={messages}
-          regenerate={regenerate}
-          selectedModelId={currentModelId}
-          selectedVisibilityType={visibilityType}
-          sendMessage={sendMessage}
-          setAttachments={setAttachments}
-          setInput={setInput}
-          setMessages={setMessages}
-          status={status}
-          stop={stop}
-          votes={votes}
-        />
       </div>
-
-      <DataStreamHandler />
-
-      <AlertDialog
-        onOpenChange={setShowCreditCardAlert}
-        open={showCreditCardAlert}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Activate AI Gateway</AlertDialogTitle>
-            <AlertDialogDescription>
-              This application requires{" "}
-              {process.env.NODE_ENV === "production" ? "the owner" : "you"} to
-              activate Vercel AI Gateway.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleActivateGateway}>
-              Activate
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    </div>
   );
 }

@@ -15,3 +15,8 @@ def test_health():
     data = response.json()
     assert "status" in data
     assert "components" in data
+
+def test_liveness():
+    response = client.get("/healthz")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

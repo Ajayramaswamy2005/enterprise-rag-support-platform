@@ -7,7 +7,7 @@ import { formatISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
 import type { DBMessage, Document } from '@/lib/db/schema';
 import { ChatbotError, type ErrorCode } from './errors';
-import type { ChatMessage, ChatTools, CustomUIDataTypes } from './types';
+import type { ChatMessage, CustomUIDataTypes } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -65,14 +65,19 @@ export function getDocumentTimestampByIndex(
 }
 
 export function sanitizeText(text: string) {
-  return text.replace('<has_function_call>', '');
+  return (
+    text
+      .replace('<has_function_call>', '')
+      // gpt-oss models cite with full-width brackets (【1】); match the [1] source cards
+      .replace(/【(\d+)(?:†[^】]*)?】/g, '[$1]')
+  );
 }
 
 export function convertToUIMessages(messages: DBMessage[]): ChatMessage[] {
   return messages.map((message) => ({
     id: message.id,
     role: message.role as 'user' | 'assistant' | 'system',
-    parts: message.parts as UIMessagePart<CustomUIDataTypes, ChatTools>[],
+    parts: message.parts as UIMessagePart<CustomUIDataTypes, never>[],
     metadata: {
       createdAt: formatISO(message.createdAt),
     },

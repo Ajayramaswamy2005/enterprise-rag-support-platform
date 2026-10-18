@@ -8,6 +8,7 @@ from app.graph.nodes import (
     validate_answer,
     generate_clarification,
     fallback,
+    increment_retry,
     should_clarify_or_answer,
     should_retry_or_fallback,
 )
@@ -25,6 +26,7 @@ class CustomerSupportWorkflow:
         self.builder.add_node("validate", validate_answer)
         self.builder.add_node("clarify", generate_clarification)
         self.builder.add_node("fallback", fallback)
+        self.builder.add_node("retry", increment_retry)
 
         self.builder.set_entry_point("classify")
         self.builder.add_edge("classify", "retrieve")
@@ -32,14 +34,16 @@ class CustomerSupportWorkflow:
         self.builder.add_conditional_edges(
             "check_ambiguity",
             should_clarify_or_answer,
-            {"clarify": "clarify", "generate": "generate"},
+            {"clarify": "clarify", "generate": "generate", "fallback": "fallback"},
         )
         self.builder.add_edge("generate", "validate")
         self.builder.add_conditional_edges(
             "validate",
             should_retry_or_fallback,
-            {"retrieve": "retrieve", "fallback": "fallback", "end": END},
+            {"retry": "retry", "fallback": "fallback", "end": END},
         )
+        # Retries loop back through retrieval with a widened search
+        self.builder.add_edge("retry", "retrieve")
         self.builder.add_edge("clarify", END)
         self.builder.add_edge("fallback", END)
 

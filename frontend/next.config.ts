@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   env: {
     NEXT_PUBLIC_BASE_PATH: basePath,
+    // Shows the Google button only when Google OAuth is configured
+    NEXT_PUBLIC_GOOGLE_AUTH_ENABLED:
+      (process.env.AUTH_GOOGLE_ID || process.env.GOOGLE_CLIENT_ID) &&
+      (process.env.AUTH_GOOGLE_SECRET || process.env.GOOGLE_CLIENT_SECRET)
+        ? "1"
+        : "",
   },
   experimental: {
     appNewScrollHandler: true,

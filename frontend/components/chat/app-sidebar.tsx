@@ -1,13 +1,8 @@
 "use client";
 
-import {
-  MessageSquareIcon,
-  PanelLeftIcon,
-  PenSquareIcon,
-  TrashIcon,
-} from "lucide-react";
+import { LibraryIcon, PanelLeftIcon, PenSquareIcon, TrashIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +13,7 @@ import {
   SidebarHistory,
 } from "@/components/chat/sidebar-history";
 import { SidebarUserNav } from "@/components/chat/sidebar-user-nav";
+import { BRAND_NAME, BrandMark } from "@/components/rag/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -46,6 +42,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { setOpenMobile, toggleSidebar } = useSidebar();
   const { mutate } = useSWRConfig();
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
@@ -67,18 +64,24 @@ export function AppSidebar({ user }: { user: User | undefined }) {
     setShowDeleteAllDialog(true);
   }, []);
 
-  const handleDeleteAll = useCallback(() => {
+  const handleDeleteAll = useCallback(async () => {
     setShowDeleteAllDialog(false);
     router.replace("/");
     mutate(unstable_serialize(getChatHistoryPaginationKey), [], {
       revalidate: false,
     });
 
-    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history`, {
-      method: "DELETE",
-    });
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/history`,
+      { method: "DELETE" }
+    ).catch(() => null);
 
-    toast.success("All chats deleted");
+    if (res?.ok) {
+      toast.success("All chats deleted");
+    } else {
+      toast.error("Could not delete chats. Please try again.");
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    }
   }, [mutate, router]);
 
   return (
@@ -91,10 +94,10 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 <SidebarMenuButton
                   asChild
                   className="size-8 !px-0 items-center justify-center group-data-[collapsible=icon]:group-hover/logo:opacity-0"
-                  tooltip="Chatbot"
+                  tooltip={BRAND_NAME}
                 >
                   <Link href="/" onClick={closeMobile}>
-                    <MessageSquareIcon className="size-4 text-sidebar-foreground/50" />
+                    <BrandMark size={22} />
                   </Link>
                 </SidebarMenuButton>
                 <Tooltip>
@@ -129,6 +132,19 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                   >
                     <PenSquareIcon className="size-4" />
                     <span className="font-medium">New chat</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    className="rounded-lg text-[13px] text-sidebar-foreground/70 transition-colors duration-150 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                    isActive={pathname.startsWith("/knowledge")}
+                    tooltip="Knowledge base"
+                  >
+                    <Link href="/knowledge" onClick={closeMobile}>
+                      <LibraryIcon className="size-4" />
+                      <span>Knowledge base</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {user ? (

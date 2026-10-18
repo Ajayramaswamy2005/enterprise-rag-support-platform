@@ -11,7 +11,7 @@ _qdrant_client: QdrantClient | None = None
 def get_qdrant_client() -> QdrantClient:
     global _qdrant_client
     if _qdrant_client is None:
-        kwargs = {"url": settings.qdrant_url}
+        kwargs = {"url": settings.qdrant_url, "timeout": 10}
         if settings.qdrant_api_key:
             kwargs["api_key"] = settings.qdrant_api_key
         _qdrant_client = QdrantClient(**kwargs)
@@ -42,14 +42,17 @@ class QdrantStore:
                     distance=Distance.COSINE,
                 ),
             )
-        try:
-            self.client.create_payload_index(
-                collection_name=self.collection,
-                field_name="category",
-                field_schema="keyword",
-            )
-        except Exception:
-            pass
+        # Qdrant Cloud (strict mode) rejects filters on unindexed fields, which
+        # would break category-filtered search and per-document deletes
+        for field_name in ("metadata.category", "document_id"):
+            try:
+                self.client.create_payload_index(
+                    collection_name=self.collection,
+                    field_name=field_name,
+                    field_schema="keyword",
+                )
+            except Exception:
+                pass
         self._ready = True
 
     def upsert(self, ids: List[str], vectors: List[List[float]], payloads: List[dict], batch_size: int = 64):
@@ -58,7 +61,9 @@ class QdrantStore:
             PointStruct(id=ids[i], vector=vectors[i], payload=payloads[i])
             for i in range(len(ids))
         ]
-        self.client.upsert(collection_name=self.collection, points=points)
+        # Batch so long documents stay under Qdrant's request size limit
+        for start in range(0, len(points), batch_size):
+            self.client.upsert(collection_name=self.collection, points=points[start:start + batch_size])
 
     def search(self, vector: List[float], top_k: int = 20, filters: Optional[dict] = None) -> List[dict]:
         self._ensure_collection()
@@ -116,6 +121,7 @@ class QdrantStore:
         ]
 
     def delete_by_document_id(self, document_id: str):
+        self._ensure_collection()
         self.client.delete(
             collection_name=self.collection,
             points_selector=Filter(
@@ -124,4 +130,5 @@ class QdrantStore:
         )
 
     def count(self) -> int:
+        self._ensure_collection()
         return self.client.count(collection_name=self.collection).count

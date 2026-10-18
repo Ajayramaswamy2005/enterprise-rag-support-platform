@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from typing import List, Optional
 
 load_dotenv()
 
@@ -12,14 +13,20 @@ class Settings(BaseSettings):
     # API
     host: str = "0.0.0.0"
     port: int = 8000
+    # Comma-separated list of allowed browser origins ("*" allows any origin, without credentials)
+    cors_origins: str = "*"
 
     # Auth
     auth_enabled: bool = True
-    api_key: Optional[str] = "rag-secret-api-key-2026"
+    # Accept both API_KEY and BACKEND_API_KEY (the name used by render.yaml and the frontend)
+    api_key: Optional[str] = Field(default=None, validation_alias=AliasChoices("API_KEY", "BACKEND_API_KEY"))
     supabase_jwt_secret: Optional[str] = None
 
     # PostgreSQL
-    postgres_url: str = "postgresql://postgres:postgres@localhost:5432/customer_support"
+    postgres_url: str = Field(
+        default="postgresql://postgres:postgres@localhost:5432/customer_support",
+        validation_alias=AliasChoices("POSTGRES_URL", "DATABASE_URL"),
+    )
 
     # Supabase
     supabase_url: Optional[str] = None
@@ -33,7 +40,8 @@ class Settings(BaseSettings):
 
     # Groq
     groq_api_key: Optional[str] = None
-    groq_model: str = "openai/gpt-oss-120b"
+    # Accept both GROQ_MODEL and MODEL_NAME (the name used by render.yaml)
+    groq_model: str = Field(default="openai/gpt-oss-120b", validation_alias=AliasChoices("GROQ_MODEL", "MODEL_NAME"))
     groq_max_tokens: int = 1024
     groq_temperature: float = 0.2
 
@@ -51,7 +59,7 @@ class Settings(BaseSettings):
     retrieval_top_k: int = 20
 
     # LangGraph
-    max_retries: int = 3
+    max_retries: int = 1
 
     # Opik
     opik_api_key: Optional[str] = None
@@ -62,6 +70,12 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        populate_by_name=True,
+        extra="ignore",
     )
+
+    @property
+    def cors_origin_list(self) -> List[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 settings = Settings()

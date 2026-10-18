@@ -21,17 +21,23 @@ export async function proxy(request: NextRequest) {
 
   const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
-  if (!token) {
-    const redirectUrl = encodeURIComponent(new URL(request.url).pathname);
+  const isAuthPage = ["/login", "/register"].includes(pathname);
 
-    return NextResponse.redirect(
-      new URL(`${base}/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
-    );
+  // Guests can't use the app (the chat layout requires a real account), so send
+  // signed-out visitors straight to login instead of minting guest users.
+  if (!token) {
+    if (isAuthPage) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/api/")) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL(`${base}/login`, request.url));
   }
 
   const isGuest = guestRegex.test(token?.email ?? "");
 
-  if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
+  if (!isGuest && isAuthPage) {
     return NextResponse.redirect(new URL(`${base}/`, request.url));
   }
 

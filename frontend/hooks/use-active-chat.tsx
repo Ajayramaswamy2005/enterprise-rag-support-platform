@@ -22,7 +22,6 @@ import { getChatHistoryPaginationKey } from "@/components/chat/sidebar-history";
 import { toast } from "@/components/chat/toast";
 import type { VisibilityType } from "@/components/chat/visibility-selector";
 import { useAutoResume } from "@/hooks/use-auto-resume";
-import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -36,17 +35,12 @@ type ActiveChatContextValue = {
   status: UseChatHelpers<ChatMessage>["status"];
   stop: UseChatHelpers<ChatMessage>["stop"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
-  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
   visibilityType: VisibilityType;
   isReadonly: boolean;
   isLoading: boolean;
   votes: Vote[] | undefined;
-  currentModelId: string;
-  setCurrentModelId: (id: string) => void;
-  showCreditCardAlert: boolean;
-  setShowCreditCardAlert: Dispatch<SetStateAction<boolean>>;
 };
 
 const ActiveChatContext = createContext<ActiveChatContextValue | null>(null);
@@ -58,7 +52,7 @@ function extractChatId(pathname: string): string | null {
 
 export function ActiveChatProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { setDataStream, setWaitingStatus } = useDataStream();
+  const { setDataStream, setWaitingStatus, setRagStage } = useDataStream();
   const { mutate } = useSWRConfig();
 
   const chatIdFromUrl = extractChatId(pathname);
@@ -73,14 +67,7 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const chatId = chatIdFromUrl ?? newChatIdRef.current;
 
-  const [currentModelId, setCurrentModelId] = useState(DEFAULT_CHAT_MODEL);
-  const currentModelIdRef = useRef(currentModelId);
-  useEffect(() => {
-    currentModelIdRef.current = currentModelId;
-  }, [currentModelId]);
-
   const [input, setInput] = useState("");
-  const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
 
   const { data: chatData, isLoading } = useSWR(
     isNewChat
@@ -105,7 +92,6 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     stop,
     regenerate,
     resumeStream,
-    addToolApprovalResponse,
   } = useChat<ChatMessage>({
     generateId: generateUUID,
     id: chatId,
@@ -115,12 +101,14 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
         setWaitingStatus(dataPart.data);
         return;
       }
+      if (dataPart.type === "data-rag-stage") {
+        setRagStage(dataPart.data.stage);
+        return;
+      }
       setDataStream((ds) => (ds ? [...ds, dataPart] : []));
     },
     onError: (error) => {
-      if (error.message?.includes("AI Gateway requires a valid credit card")) {
-        setShowCreditCardAlert(true);
-      } else if (error instanceof ChatbotError) {
+      if (error instanceof ChatbotError) {
         toast({ description: error.message, type: "error" });
       } else {
         toast({
@@ -132,41 +120,20 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
-    sendAutomaticallyWhen: ({ messages: currentMessages }) => {
-      const lastMessage = currentMessages.at(-1);
-      return (
-        lastMessage?.parts?.some(
-          (part) =>
-            "state" in part &&
-            part.state === "approval-responded" &&
-            "approval" in part &&
-            (part.approval as { approved?: boolean })?.approved === true
-        ) ?? false
-      );
-    },
     transport: new DefaultChatTransport({
       api: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/api/chat`,
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
-        const lastMessage = request.messages.at(-1);
-        const isToolApprovalContinuation =
-          lastMessage?.role !== "user" ||
-          request.messages.some((msg) =>
-            msg.parts?.some((part) => {
-              const { state } = part as { state?: string };
-              return (
-                state === "approval-responded" || state === "output-denied"
-              );
-            })
-          );
+        // The server keeps the history; only the newest user turn is sent.
+        // (On regenerate the trailing assistant reply is already dropped.)
+        const lastUserMessage = request.messages.findLast(
+          (m) => m.role === "user"
+        );
 
         return {
           body: {
             id: request.id,
-            ...(isToolApprovalContinuation
-              ? { messages: request.messages }
-              : { message: lastMessage }),
-            selectedChatModel: currentModelIdRef.current,
+            message: lastUserMessage,
             selectedVisibilityType: visibility,
             ...request.body,
           },
@@ -178,8 +145,9 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status === "submitted" || status === "ready" || status === "error") {
       setWaitingStatus(undefined);
+      setRagStage(undefined);
     }
-  }, [status, setWaitingStatus]);
+  }, [status, setWaitingStatus, setRagStage]);
 
   const loadedChatIds = useRef(new Set<string>());
 
@@ -207,18 +175,6 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
     }
   }, [chatId, isNewChat, setMessages]);
 
-  useEffect(() => {
-    if (chatData && !isNewChat) {
-      const cookieModel = document.cookie
-        .split("; ")
-        .find((row) => row.startsWith("chat-model="))
-        ?.split("=")[1];
-      if (cookieModel) {
-        setCurrentModelId(decodeURIComponent(cookieModel));
-      }
-    }
-  }, [chatData, isNewChat]);
-
   const hasAppendedQueryRef = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -239,9 +195,9 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   useAutoResume({
     autoResume: !isNewChat && !!chatData,
+    chatId,
     initialMessages,
     resumeStream,
-    setMessages,
   });
 
   const isReadonly = isNewChat ? false : (chatData?.isReadonly ?? false);
@@ -256,20 +212,15 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ActiveChatContextValue>(
     () => ({
-      addToolApprovalResponse,
       chatId,
-      currentModelId,
       input,
       isLoading: !isNewChat && isLoading,
       isReadonly,
       messages,
       regenerate,
       sendMessage,
-      setCurrentModelId,
       setInput,
       setMessages,
-      setShowCreditCardAlert,
-      showCreditCardAlert,
       status,
       stop,
       visibilityType: visibility,
@@ -283,15 +234,12 @@ export function ActiveChatProvider({ children }: { children: ReactNode }) {
       status,
       stop,
       regenerate,
-      addToolApprovalResponse,
       input,
       visibility,
       isReadonly,
       isNewChat,
       isLoading,
       votes,
-      currentModelId,
-      showCreditCardAlert,
     ]
   );
 

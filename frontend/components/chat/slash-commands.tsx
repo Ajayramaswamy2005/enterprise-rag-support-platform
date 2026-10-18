@@ -2,11 +2,9 @@
 
 import {
   BombIcon,
-  ListIcon,
+  LibraryIcon,
   PaletteIcon,
-  PenLineIcon,
   PenSquareIcon,
-  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
@@ -28,22 +26,10 @@ export const slashCommands: SlashCommand[] = [
     name: "new",
   },
   {
-    action: "clear",
-    description: "Clear current chat",
-    icon: <Trash2Icon className="size-3.5" />,
-    name: "clear",
-  },
-  {
-    action: "rename",
-    description: "Rename current chat",
-    icon: <PenLineIcon className="size-3.5" />,
-    name: "rename",
-  },
-  {
-    action: "model",
-    description: "Change the AI model",
-    icon: <ListIcon className="size-3.5" />,
-    name: "model",
+    action: "knowledge",
+    description: "Open the knowledge base",
+    icon: <LibraryIcon className="size-3.5" />,
+    name: "knowledge",
   },
   {
     action: "theme",

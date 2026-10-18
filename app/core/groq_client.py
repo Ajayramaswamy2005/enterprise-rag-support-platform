@@ -1,18 +1,28 @@
 import os
 from typing import AsyncIterator, List
-from groq import Groq
+from groq import AsyncGroq, Groq
 from app.config import settings
 
 _groq_client: Groq | None = None
+_async_groq_client: AsyncGroq | None = None
+
+def _api_key() -> str:
+    key = settings.groq_api_key or os.environ.get("GROQ_API_KEY")
+    if not key:
+        raise RuntimeError("GROQ_API_KEY not configured")
+    return key
 
 def get_groq_client() -> Groq:
     global _groq_client
     if _groq_client is None:
-        key = settings.groq_api_key or os.environ.get("GROQ_API_KEY")
-        if not key:
-            raise RuntimeError("GROQ_API_KEY not configured")
-        _groq_client = Groq(api_key=key)
+        _groq_client = Groq(api_key=_api_key())
     return _groq_client
+
+def get_async_groq_client() -> AsyncGroq:
+    global _async_groq_client
+    if _async_groq_client is None:
+        _async_groq_client = AsyncGroq(api_key=_api_key())
+    return _async_groq_client
 
 class GroqLLM:
     def __init__(self):
@@ -29,14 +39,17 @@ class GroqLLM:
         return response.choices[0].message.content or ""
 
     async def chat_stream(self, messages: List[dict], temperature: float | None = None, max_tokens: int | None = None) -> AsyncIterator[str]:
-        response = self.client.chat.completions.create(
+        # Use the async client so streaming does not block the event loop
+        response = await get_async_groq_client().chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=temperature if temperature is not None else settings.groq_temperature,
             max_tokens=max_tokens if max_tokens is not None else settings.groq_max_tokens,
             stream=True,
         )
-        for chunk in response:
+        async for chunk in response:
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta.content
             if delta:
                 yield delta
@@ -57,4 +70,4 @@ class GroqLLM:
     def judge_yes_no(self, prompt: str) -> bool:
         system = "Answer only Yes or No."
         text = self.chat([{"role": "system", "content": system}, {"role": "user", "content": prompt}])
-        return "yes" in text.strip().lower()
+        return text.strip().lower().startswith("yes")

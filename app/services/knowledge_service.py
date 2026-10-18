@@ -1,25 +1,28 @@
+import logging
 from uuid import UUID, uuid4
 from typing import List
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models.database import Document
 from app.models.schemas import DocumentCreate, DocumentUpdate, DocumentResponse
 from app.core.qdrant_client import QdrantStore
 from app.core.embeddings import embed_text
 from app.retrieval.chunker import Chunker
-from app.retrieval.hybrid import HybridSearch
-from app.retrieval.bm25 import BM25Index
+from app.retrieval.bm25 import shared_bm25
+
+logger = logging.getLogger(__name__)
 
 class KnowledgeService:
     def __init__(self):
         self.db_session: Session | None = None
         self.store = QdrantStore()
         self.chunker = Chunker()
-        self.hybrid = HybridSearch()
+        self.bm25 = shared_bm25
 
     def set_db(self, db: Session):
         self.db_session = db
 
-    def create_document(self, payload: DocumentCreate) -> DocumentResponse:
+    def create_document(self, payload: DocumentCreate) -> tuple[DocumentResponse, int]:
         doc = Document(
             id=uuid4(),
             title=payload.title,
@@ -29,25 +32,33 @@ class KnowledgeService:
         self.db_session.add(doc)
         self.db_session.commit()
         self.db_session.refresh(doc)
-        self._index_document(doc)
-        return self._to_schema(doc)
+        try:
+            chunk_count = self._index_document(doc)
+        except Exception:
+            # Don't leave a document in PostgreSQL that retrieval can never find
+            self.db_session.delete(doc)
+            self.db_session.commit()
+            raise
+        return self._to_schema(doc), chunk_count
 
-    def _index_document(self, doc: Document):
-        chunks = self.chunker.chunk_document(
+    def _chunks_for(self, doc: Document) -> List[dict]:
+        return self.chunker.chunk_document(
             document_id=str(doc.id),
             title=doc.title,
             content=doc.content,
-            metadata=doc.metadata_,
+            metadata=doc.metadata_ or {},
         )
+
+    def _index_document(self, doc: Document) -> int:
+        chunks = self._chunks_for(doc)
         if not chunks:
-            return
+            return 0
         ids = [c["chunk_id"] for c in chunks]
         texts = [c["chunk"] for c in chunks]
         vectors = embed_text(texts)
         self.store.upsert(ids=ids, vectors=vectors, payloads=chunks)
-        # Re-warm BM25 in-memory index with the latest state
-        payloads = [c for c in chunks]
-        self.hybrid.warm(payloads, texts)
+        self.bm25.from_qdrant_payloads(chunks, texts)
+        return len(chunks)
 
     def update_document(self, document_id: UUID, payload: DocumentUpdate) -> DocumentResponse:
         doc = self.db_session.query(Document).filter(Document.id == document_id).first()
@@ -62,6 +73,7 @@ class KnowledgeService:
         self.db_session.commit()
         self.db_session.refresh(doc)
         self.store.delete_by_document_id(str(document_id))
+        self.bm25.remove_document(str(document_id))
         self._index_document(doc)
         return self._to_schema(doc)
 
@@ -72,37 +84,57 @@ class KnowledgeService:
         return self._to_schema(doc)
 
     def list_documents(self, skip: int = 0, limit: int = 50) -> List[DocumentResponse]:
-        docs = self.db_session.query(Document).offset(skip).limit(limit).all()
+        docs = (
+            self.db_session.query(Document)
+            .order_by(Document.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
         return [self._to_schema(d) for d in docs]
 
-    def delete_document(self, document_id: UUID):
+    def count_documents(self) -> int:
+        return self.db_session.query(func.count(Document.id)).scalar() or 0
+
+    def delete_document(self, document_id: UUID) -> bool:
         doc = self.db_session.query(Document).filter(Document.id == document_id).first()
         if doc:
             self.db_session.delete(doc)
             self.db_session.commit()
-        self.store.delete_by_document_id(str(document_id))
+        self.bm25.remove_document(str(document_id))
+        try:
+            self.store.delete_by_document_id(str(document_id))
+        except Exception as e:
+            logger.warning("Could not delete vectors for %s: %s", document_id, e)
+        return doc is not None
+
+    def stats(self) -> dict:
+        try:
+            vectors = self.store.count()
+        except Exception:
+            vectors = None
+        return {
+            "documents": self.count_documents(),
+            "sparse_chunks": len(self.bm25),
+            "vectors": vectors,
+        }
 
     def _to_schema(self, doc: Document) -> DocumentResponse:
         return DocumentResponse(
             id=doc.id,
             title=doc.title,
             content=doc.content,
-            metadata=doc.metadata_,
+            metadata=doc.metadata_ or {},
             created_at=doc.created_at,
             updated_at=doc.updated_at,
         )
 
-    def warm_retrieval_index(self):
-        docs = self.db_session.query(Document).all()
+    def warm_retrieval_index(self) -> int:
+        """Rebuild the in-memory BM25 index from every document in PostgreSQL."""
         all_chunks = []
-        all_payloads = []
-        for doc in docs:
-            chunks = self.chunker.chunk_document(
-                document_id=str(doc.id),
-                title=doc.title,
-                content=doc.content,
-                metadata=doc.metadata_,
-            )
-            all_chunks.extend([c["chunk"] for c in chunks])
-            all_payloads.extend(chunks)
-        self.hybrid.warm(all_payloads, all_chunks)
+        for doc in self.db_session.query(Document).all():
+            all_chunks.extend(self._chunks_for(doc))
+        self.bm25.clear()
+        if all_chunks:
+            self.bm25.from_qdrant_payloads(all_chunks, [c["chunk"] for c in all_chunks])
+        return len(all_chunks)
