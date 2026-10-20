@@ -3,7 +3,7 @@ services:
   # 1. FastAPI RAG Backend Service
   # -------------------------------------------------------------
   - type: web
-    name: ajay-rag-backend-2026
+    name: ajayramaswamy-rag-platform-2026
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
@@ -38,7 +38,7 @@ services:
   # 2. Next.js Chatbot Frontend Service
   # -------------------------------------------------------------
   - type: web
-    name: ajay-rag-frontend-2026
+    name: ajayramaswamy-chat
     runtime: node
     plan: free
     rootDir: frontend
@@ -53,12 +53,16 @@ services:
       - key: BACKEND_API_KEY
         fromService:
           type: web
-          name: ajay-rag-backend-2026
+          name: ajayramaswamy-rag-platform-2026
           envVarKey: BACKEND_API_KEY
       # Public URL: free-tier services can't receive private-network traffic,
       # so the internal hostname (fromService.property: host) doesn't work here
       - key: BACKEND_API_URL
-        value: https://ajay-rag-backend-2026.onrender.com
+        value: https://ajayramaswamy-rag-platform-2026.onrender.com
+      # Public URL of this service; Auth.js needs it behind Render's proxy
+      # (otherwise OAuth callbacks are built as https://localhost:10000/...)
+      - key: AUTH_URL
+        value: https://ajayramaswamy-chat.onrender.com
       # Optional: only used to generate chat titles
       - key: GROQ_API_KEY
         sync: false
