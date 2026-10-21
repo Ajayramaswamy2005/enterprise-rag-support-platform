@@ -75,6 +75,13 @@ def delete_document(document_id: UUID, db: Session = Depends(get_db)):
     # A 204 must not carry a body
     return Response(status_code=204)
 
+@router.post("/reindex", status_code=200)
+def reindex(force: bool = Query(False), db: Session = Depends(get_db)):
+    try:
+        return _service(db).reindex(force=force)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Re-indexing failed: {e}")
+
 @router.post("/warm", status_code=200)
 def warm_index(db: Session = Depends(get_db)):
     chunks = _service(db).warm_retrieval_index()

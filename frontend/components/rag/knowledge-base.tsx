@@ -1,6 +1,11 @@
 "use client";
 
-import { FileTextIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+  UploadIcon,
+} from "lucide-react";
 import {
   type ChangeEvent,
   type FormEvent,
@@ -274,6 +279,53 @@ function DocumentRow({
   );
 }
 
+function ReindexButton({
+  outOfSync,
+  onDone,
+}: {
+  outOfSync: boolean;
+  onDone: () => void;
+}) {
+  const [running, setRunning] = useState(false);
+
+  const handleReindex = useCallback(async () => {
+    setRunning(true);
+    try {
+      const res = await fetch(`${base}/api/knowledge/reindex`, {
+        method: "POST",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? `Request failed (${res.status})`);
+      }
+      toast.success(
+        body.vectors_written > 0
+          ? `Re-indexed ${body.vectors_written} missing passage${body.vectors_written === 1 ? "" : "s"}.`
+          : "Everything was already indexed."
+      );
+      onDone();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not re-index."
+      );
+    } finally {
+      setRunning(false);
+    }
+  }, [onDone]);
+
+  return (
+    <Button
+      disabled={running}
+      onClick={handleReindex}
+      size="sm"
+      variant={outOfSync ? "default" : "outline"}
+    >
+      <RefreshCwIcon className={cn("size-3.5", running && "animate-spin")} />
+      {running ? "Re-indexing…" : "Re-index"}
+    </Button>
+  );
+}
+
 export function KnowledgeBase() {
   const { data, error, isLoading, mutate } = useKnowledge();
   const { data: health } = useBackendHealth();
@@ -283,6 +335,8 @@ export function KnowledgeBase() {
 
   const items = data?.items ?? [];
   const stats = data?.stats;
+  const outOfSync =
+    typeof stats?.vectors === "number" && stats.vectors < stats.sparse_chunks;
 
   return (
     <div className="flex h-dvh w-full flex-col overflow-hidden bg-sidebar">
@@ -320,6 +374,22 @@ export function KnowledgeBase() {
             <Stat label="Passages" value={stats?.sparse_chunks ?? "—"} />
             <Stat label="Vectors" value={stats?.vectors ?? "—"} />
           </div>
+
+          {stats ? (
+            <div className="flex items-center justify-between gap-3">
+              <span
+                className={cn(
+                  "text-[12.5px]",
+                  outOfSync ? "text-caution" : "text-muted-foreground"
+                )}
+              >
+                {outOfSync
+                  ? `${stats.sparse_chunks - (stats.vectors ?? 0)} passages are missing from vector search, so answers rely on keyword matching alone.`
+                  : "Re-index rebuilds search from the stored documents if they ever drift out of sync."}
+              </span>
+              <ReindexButton onDone={refresh} outOfSync={outOfSync} />
+            </div>
+          ) : null}
 
           <AddDocumentForm onAdded={refresh} />
 

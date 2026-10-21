@@ -162,3 +162,63 @@ def test_stream_survives_ambiguity_check_failure(monkeypatch):
     assert "error" not in types
     assert next(e for e in events if e["type"] == "meta")["mode"] == "answer"
     assert "".join(e["content"] for e in events if e["type"] == "token") == "Five days."
+
+
+def test_reindex_only_embeds_chunks_missing_from_qdrant(monkeypatch):
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    import app.services.knowledge_service as ks
+    from app.retrieval.bm25 import BM25Index
+
+    docs = [
+        SimpleNamespace(id=uuid4(), title=f"Doc {i}", content=f"Policy text number {i}.", metadata_={})
+        for i in range(3)
+    ]
+
+    class FakeQuery:
+        def all(self):
+            return docs
+
+    class FakeDB:
+        def query(self, _model):
+            return FakeQuery()
+
+    class FakeStore:
+        def __init__(self):
+            self.points = {}
+
+        def existing_ids(self, ids):
+            return {i for i in ids if i in self.points}
+
+        def upsert(self, ids, vectors, payloads):
+            self.points.update(zip(ids, payloads))
+
+        def delete_by_document_id(self, document_id):
+            self.points = {k: v for k, v in self.points.items() if v["document_id"] != document_id}
+
+    embedded = []
+    monkeypatch.setattr(ks, "embed_text", lambda texts: embedded.extend(texts) or [[0.0]] * len(texts))
+
+    service = ks.KnowledgeService.__new__(ks.KnowledgeService)
+    service.db_session = FakeDB()
+    service.store = FakeStore()
+    service.chunker = ks.Chunker()
+    service.bm25 = BM25Index()
+
+    # Pretend the first document was indexed but the other two never reached Qdrant
+    first = service._chunks_for(docs[0])
+    service.store.upsert([c["chunk_id"] for c in first], None, first)
+
+    result = service.reindex()
+    assert result["vectors_written"] == result["chunks"] - len(first)
+    assert len(service.store.points) == result["chunks"]
+    assert len(service.bm25) == result["chunks"]
+
+    # Nothing missing: no embedding work on the next startup
+    embedded.clear()
+    assert service.reindex()["vectors_written"] == 0
+    assert embedded == []
+
+    # Forced rebuild re-embeds everything
+    assert service.reindex(force=True)["vectors_written"] == result["chunks"]

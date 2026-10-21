@@ -26,6 +26,12 @@ def _bootstrap():
             service.set_db(db)
             count = service.warm_retrieval_index()
             logger.info("BM25 index warmed with %d chunks", count)
+            # Repair vectors for documents added while Qdrant was unreachable
+            try:
+                result = service.reindex()
+                logger.info("Vector sync: %s", result)
+            except Exception as e:
+                logger.warning("Could not sync vectors on startup: %s", e)
         finally:
             db.close()
     except Exception as e:

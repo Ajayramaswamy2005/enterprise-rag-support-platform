@@ -129,6 +129,39 @@ class KnowledgeService:
             updated_at=doc.updated_at,
         )
 
+    def reindex(self, force: bool = False) -> dict:
+        """Bring Qdrant and BM25 back in line with PostgreSQL.
+
+        By default only chunks missing from Qdrant are embedded, which repairs
+        documents added while Qdrant was unreachable. `force` re-embeds
+        everything, e.g. after changing the embedding model.
+        """
+        docs = self.db_session.query(Document).all()
+        all_chunks = []
+        missing = []
+        for doc in docs:
+            chunks = self._chunks_for(doc)
+            all_chunks.extend(chunks)
+            if force:
+                self.store.delete_by_document_id(str(doc.id))
+        if force:
+            missing = all_chunks
+        elif all_chunks:
+            existing = self.store.existing_ids([c["chunk_id"] for c in all_chunks])
+            missing = [c for c in all_chunks if c["chunk_id"] not in existing]
+        if missing:
+            self.store.upsert(
+                ids=[c["chunk_id"] for c in missing],
+                vectors=embed_text([c["chunk"] for c in missing]),
+                payloads=missing,
+            )
+        self.warm_retrieval_index()
+        return {
+            "documents": len(docs),
+            "chunks": len(all_chunks),
+            "vectors_written": len(missing),
+        }
+
     def warm_retrieval_index(self) -> int:
         """Rebuild the in-memory BM25 index from every document in PostgreSQL."""
         all_chunks = []

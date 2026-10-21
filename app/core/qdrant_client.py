@@ -129,6 +129,20 @@ class QdrantStore:
             ),
         )
 
+    def existing_ids(self, ids: List[str], batch_size: int = 256) -> set:
+        """Return the subset of `ids` that already have a point in the collection."""
+        self._ensure_collection()
+        found = set()
+        for start in range(0, len(ids), batch_size):
+            points = self.client.retrieve(
+                collection_name=self.collection,
+                ids=ids[start:start + batch_size],
+                with_payload=False,
+                with_vectors=False,
+            )
+            found.update(str(p.id) for p in points)
+        return found
+
     def count(self) -> int:
         self._ensure_collection()
         return self.client.count(collection_name=self.collection).count

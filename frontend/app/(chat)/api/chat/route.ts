@@ -33,15 +33,52 @@ import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 /** Number of prior turns forwarded to the backend as conversational memory. */
 const HISTORY_TURNS = 12;
 /**
- * How long to wait for the backend to start responding. A sleeping free-tier
- * Render service can take about a minute to wake up.
+ * A sleeping free-tier Render service can take a minute or two to wake up, and
+ * Render answers 502/503 or holds the connection while it does. Each attempt
+ * waits this long for response headers; attempts repeat until the budget runs out.
  */
-const BACKEND_STREAM_TIMEOUT_MS = 90_000;
+const BACKEND_ATTEMPT_TIMEOUT_MS = 60_000;
+const BACKEND_WAKE_BUDGET_MS = 180_000;
+const BACKEND_RETRY_DELAY_MS = 3000;
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+async function openBackendStream(
+  body: string,
+  signal: AbortSignal
+): Promise<Response & { body: ReadableStream<Uint8Array> }> {
+  const deadline = Date.now() + BACKEND_WAKE_BUDGET_MS;
+  while (true) {
+    try {
+      // biome-ignore lint/performance/noAwaitInLoops: retries must run one after another
+      const response = await backendFetch("/chat/stream", {
+        body,
+        method: "POST",
+        signal,
+        timeoutMs: Math.min(BACKEND_ATTEMPT_TIMEOUT_MS, deadline - Date.now()),
+      });
+      if (response.ok && response.body) {
+        return response as Response & { body: ReadableStream<Uint8Array> };
+      }
+      throw new BackendError(await readBackendError(response), response.status);
+    } catch (error) {
+      const retryable =
+        error instanceof BackendError && RETRYABLE_STATUSES.has(error.status);
+      if (
+        !retryable ||
+        signal.aborted ||
+        Date.now() + BACKEND_RETRY_DELAY_MS >= deadline
+      ) {
+        throw error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, BACKEND_RETRY_DELAY_MS));
+  }
+}
 
 function getStreamContext() {
   try {
@@ -154,22 +191,13 @@ export async function POST(request: Request) {
       execute: async ({ writer }) => {
         writer.write({ type: "start" });
 
-        const response = await backendFetch("/chat/stream", {
-          body: JSON.stringify({
+        const response = await openBackendStream(
+          JSON.stringify({
             conversation_id: id,
             messages: backendMessages,
           }),
-          method: "POST",
-          signal: request.signal,
-          timeoutMs: BACKEND_STREAM_TIMEOUT_MS,
-        });
-
-        if (!response.ok || !response.body) {
-          throw new BackendError(
-            await readBackendError(response),
-            response.status
-          );
-        }
+          request.signal
+        );
 
         const textId = generateUUID();
         let textStarted = false;
@@ -196,7 +224,11 @@ export async function POST(request: Request) {
               writer.write({ id: textId, type: "text-start" });
               textStarted = true;
             }
-            writer.write({ delta: event.content, id: textId, type: "text-delta" });
+            writer.write({
+              delta: event.content,
+              id: textId,
+              type: "text-delta",
+            });
           } else if (event.type === "error") {
             writer.write({ errorText: event.error, type: "error" });
           } else if (event.type === "done" && meta) {

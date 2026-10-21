@@ -100,7 +100,7 @@ export function PipelineTracker() {
         {active
           ? active.detail
           : showColdStart
-            ? "Waking the knowledge backend — free-tier services can take up to a minute on the first request."
+            ? "Waking the knowledge backend — free-tier services can take a minute or two after a quiet spell. Your question will be answered once it's up."
             : "Connecting to the knowledge backend…"}
       </p>
     </div>
