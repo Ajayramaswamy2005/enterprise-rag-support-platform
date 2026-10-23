@@ -71,6 +71,23 @@ The fused candidates are then refined by a Cross-Encoder (`cross-encoder/ms-marc
 
 ---
 
+## Evaluation (Ragas)
+
+`evaluation/` benchmarks semantic-only retrieval against the hybrid pipeline (BM25 + dense + RRF + Cross-Encoder re-ranking) with [Ragas](https://docs.ragas.io) **Context Precision** and **Answer Relevancy**.
+
+- `evaluation/data/corpus.json` — 25-article enterprise helpdesk knowledge base (billing, SSO, API, data retention, ...)
+- `evaluation/data/testset.json` — 33 questions with reference answers, mixing exact-term lookups (error codes, plan names) and paraphrased questions
+- `evaluation/run_ragas.py` — indexes the corpus with the app's own `Chunker`, `DenseRetriever`, `HybridSearch`, and `CrossEncoderReranker` (in-memory Qdrant, no services needed), answers with the same prompt as the LangGraph `generate` node, and scores both configurations with Ragas using Groq as the judge
+
+Retrieval is the only thing that differs between the two runs. The generator, prompt, top-k, and judge are the same for both.
+
+```bash
+pip install -r requirements-eval.txt
+python -m evaluation.run_ragas          # needs GROQ_API_KEY; writes evaluation/results/
+```
+
+---
+
 ## Tech Stack
 
 | Component          | Technology                                             |

@@ -1,0 +1,152 @@
+[
+  {
+    "document_id": "kb-plans-overview",
+    "title": "Subscription plans overview",
+    "metadata": {"category": "billing"},
+    "content": "Acme Helpdesk is sold in three plans: Starter, Growth, and Enterprise. Starter costs $19 per agent per month and includes email ticketing, a shared inbox, and up to 3 agents. Growth costs $49 per agent per month and adds live chat, automations, SLA policies, and unlimited agents. Enterprise is priced by quote and adds SAML single sign-on, audit logs, a 99.95% uptime SLA, data residency, and a named customer success manager. All plans can be billed monthly or annually; annual billing is discounted by 20%."
+  },
+  {
+    "document_id": "kb-refund-policy",
+    "title": "Refund policy",
+    "metadata": {"category": "billing"},
+    "content": "Monthly subscriptions can be cancelled at any time and are not refunded for the current billing period; access continues until the period ends. Annual subscriptions are eligible for a full refund within 30 days of the initial purchase. After 30 days, annual subscriptions are refunded on a prorated basis only when cancellation is due to a documented service outage that breached the SLA. Refunds are issued to the original payment method and take 5 to 10 business days to appear. Add-on purchases such as extra AI credits are non-refundable."
+  },
+  {
+    "document_id": "kb-invoice-download",
+    "title": "Downloading invoices and receipts",
+    "metadata": {"category": "billing"},
+    "content": "Account owners and billing admins can download invoices from Settings > Billing > Invoice history. Each invoice is available as a PDF and includes the VAT or GST number entered on the account. To add or change a tax ID, go to Settings > Billing > Company details before the next invoice is generated; past invoices cannot be reissued with a new tax ID. Invoices are emailed automatically to the billing contact on the 1st of each month for monthly plans and on the renewal date for annual plans."
+  },
+  {
+    "document_id": "kb-payment-failed",
+    "title": "Failed payments and account suspension",
+    "metadata": {"category": "billing"},
+    "content": "If a card payment fails, Acme retries the charge on day 3, day 5, and day 7 after the due date and emails the billing contact each time. If all retries fail, the workspace enters a read-only grace state for 14 days, during which agents can view but not reply to tickets. After the 14-day grace period the workspace is suspended. Updating the payment method in Settings > Billing immediately triggers a new charge attempt and restores full access when it succeeds."
+  },
+  {
+    "document_id": "kb-seat-changes",
+    "title": "Adding and removing agent seats",
+    "metadata": {"category": "billing"},
+    "content": "Seats can be added at any time from Settings > Billing > Seats. Added seats are charged immediately on a prorated basis for the rest of the billing period. Removing seats takes effect at the next renewal; no credit is issued for the remainder of the current period. Light agents, who can only add internal notes, are free on Growth and Enterprise and do not consume a paid seat. Starter workspaces are capped at 3 agents and must upgrade to Growth to add a fourth."
+  },
+  {
+    "document_id": "kb-password-reset",
+    "title": "Resetting your password",
+    "metadata": {"category": "support"},
+    "content": "To reset your password, click Forgot password on the login page and enter your work email. A reset link is sent within a few minutes and expires after 15 minutes. If your workspace uses SAML single sign-on, passwords are managed by your identity provider and the Forgot password link is disabled; contact your IT administrator instead. Five failed login attempts lock the account for 30 minutes."
+  },
+  {
+    "document_id": "kb-2fa",
+    "title": "Two-factor authentication",
+    "metadata": {"category": "support"},
+    "content": "Two-factor authentication (2FA) can be enabled per user from Profile > Security using any TOTP authenticator app. Workspace admins on Growth and Enterprise can enforce 2FA for all agents from Settings > Security. When you enable 2FA you receive 10 single-use backup codes; store them safely. If you lose your device and your backup codes, a workspace admin can reset your 2FA from Settings > Team. If you are the only admin, contact support with proof of account ownership; recovery takes up to 2 business days."
+  },
+  {
+    "document_id": "kb-sso-saml",
+    "title": "Configuring SAML single sign-on",
+    "metadata": {"category": "technical"},
+    "content": "SAML 2.0 single sign-on is available on the Enterprise plan. Supported identity providers include Okta, Microsoft Entra ID, Google Workspace, and OneLogin. To configure it, open Settings > Security > SSO, copy the ACS URL and Entity ID into your identity provider, then upload the IdP metadata XML. Just-in-time provisioning creates agents on their first login. SCIM 2.0 provisioning for automatic deprovisioning is also supported on Enterprise. Enforcing SSO disables password login for everyone except the account owner, who keeps a break-glass password."
+  },
+  {
+    "document_id": "kb-oidc-login",
+    "title": "Sign in with Google or Microsoft",
+    "metadata": {"category": "technical"},
+    "content": "All plans support social sign-in with a Google or Microsoft account using OpenID Connect. Social sign-in is not the same as SAML single sign-on: it does not let administrators enforce login policies, provision users, or deprovision them centrally. Users who signed up with email and password can link a Google or Microsoft account from Profile > Security. Admins can disable social sign-in for the workspace from Settings > Security."
+  },
+  {
+    "document_id": "kb-api-rate-limits",
+    "title": "REST API rate limits",
+    "metadata": {"category": "technical"},
+    "content": "The Acme REST API is rate limited per workspace. Starter workspaces are limited to 100 requests per minute, Growth to 700 requests per minute, and Enterprise to 2,500 requests per minute. When the limit is exceeded the API returns HTTP 429 with a Retry-After header giving the number of seconds to wait. Bulk endpoints such as /tickets/bulk count as 10 requests each. Rate limit headers X-RateLimit-Limit and X-RateLimit-Remaining are returned on every response."
+  },
+  {
+    "document_id": "kb-api-auth",
+    "title": "API authentication and tokens",
+    "metadata": {"category": "technical"},
+    "content": "API requests are authenticated with a bearer token sent in the Authorization header. Tokens are created by admins in Settings > Developers > API tokens and can be scoped to read-only or read-write access. Tokens do not expire by default, but admins can set an expiry of 30, 90, or 365 days. A revoked token stops working immediately. OAuth 2.0 authorization code flow is available for marketplace apps that act on behalf of other workspaces."
+  },
+  {
+    "document_id": "kb-webhooks",
+    "title": "Webhooks",
+    "metadata": {"category": "technical"},
+    "content": "Webhooks send an HTTP POST to your endpoint when tickets are created, updated, or solved. Each request includes an X-Acme-Signature header containing an HMAC-SHA256 signature of the raw body, computed with your webhook secret; verify it before trusting the payload. Your endpoint must respond with a 2xx status within 10 seconds. Failed deliveries are retried with exponential backoff for up to 24 hours, after which the webhook is automatically disabled and admins are notified by email."
+  },
+  {
+    "document_id": "kb-error-codes",
+    "title": "API error codes reference",
+    "metadata": {"category": "technical"},
+    "content": "ERR-4013 means the request body failed schema validation; the response lists the invalid fields. ERR-4031 means the API token is valid but lacks the required scope, for example a read-only token calling a write endpoint. ERR-4040 means the requested ticket or user does not exist or was deleted. ERR-4090 means a conflicting update: another request modified the same ticket, so re-fetch it and retry with the latest version. ERR-5030 means the service is temporarily unavailable during maintenance; retry after the time in the Retry-After header."
+  },
+  {
+    "document_id": "kb-data-retention",
+    "title": "Data retention",
+    "metadata": {"category": "support"},
+    "content": "Closed tickets are retained for 1 year on Starter, 3 years on Growth, and for a configurable period up to 10 years on Enterprise. Attachments follow the same retention as their ticket. Deleted tickets go to the trash and can be restored for 30 days before they are permanently purged. Enterprise admins can create retention rules per brand or per ticket form to automatically redact or delete data after a set number of days."
+  },
+  {
+    "document_id": "kb-data-export",
+    "title": "Exporting your data",
+    "metadata": {"category": "support"},
+    "content": "Admins can export tickets, users, and organizations as CSV or JSON from Settings > Data > Export. Exports are generated in the background and a download link is emailed when ready; the link is valid for 7 days. Starter workspaces can run one full export per week. Growth and Enterprise workspaces can schedule incremental exports daily. Exports of more than 1 million tickets should use the incremental export API instead."
+  },
+  {
+    "document_id": "kb-data-residency",
+    "title": "Data residency and hosting regions",
+    "metadata": {"category": "technical"},
+    "content": "Customer data is hosted in the United States by default. Enterprise customers can choose data residency in the European Union (Frankfurt) or Australia (Sydney) at workspace creation. Migrating an existing workspace to a different region is possible on Enterprise and requires a scheduled maintenance window of up to 4 hours. Backups are stored in the same region as the primary data."
+  },
+  {
+    "document_id": "kb-sla-uptime",
+    "title": "Uptime SLA and service credits",
+    "metadata": {"category": "support"},
+    "content": "Enterprise plans include a 99.95% monthly uptime commitment. If monthly uptime falls below 99.95%, the customer receives a service credit of 10% of the monthly fee; below 99.0%, the credit is 25%. Credits must be requested within 30 days of the end of the affected month by contacting support. Scheduled maintenance announced at least 72 hours in advance does not count as downtime. Starter and Growth plans are best-effort and are not covered by the uptime SLA."
+  },
+  {
+    "document_id": "kb-ticket-sla",
+    "title": "Ticket SLA policies",
+    "metadata": {"category": "support"},
+    "content": "SLA policies define first-reply and resolution targets for your customers' tickets, not Acme's own uptime. They are available on Growth and Enterprise. Each policy matches tickets by conditions such as priority or customer tier and sets targets in business or calendar hours. Tickets approaching a breach are flagged in amber and breached tickets in red. SLA reports are available under Analytics > SLA performance."
+  },
+  {
+    "document_id": "kb-live-chat-widget",
+    "title": "Installing the live chat widget",
+    "metadata": {"category": "technical"},
+    "content": "Live chat is available on Growth and Enterprise. To install the widget, copy the snippet from Settings > Channels > Chat and paste it before the closing body tag on every page where chat should appear. The widget loads asynchronously and adds about 40 KB to the page. To restrict which domains can load the widget, add them to the domain allowlist on the same settings page. Chats that arrive when no agent is online are converted into email tickets automatically."
+  },
+  {
+    "document_id": "kb-email-forwarding",
+    "title": "Setting up email forwarding",
+    "metadata": {"category": "technical"},
+    "content": "To receive support email as tickets, forward your support address (for example support@yourcompany.com) to the workspace address shown in Settings > Channels > Email. Then add Acme to your domain's SPF record and publish the two DKIM CNAME records shown on the same page so that replies sent from Acme are not marked as spam. Verification usually completes within an hour of the DNS records propagating."
+  },
+  {
+    "document_id": "kb-automations",
+    "title": "Automations and triggers",
+    "metadata": {"category": "support"},
+    "content": "Triggers run immediately when a ticket is created or updated and its conditions match. Automations run on a time-based schedule every hour and act on tickets that meet time conditions, such as pending for more than 48 hours. Growth workspaces can have up to 100 active triggers and 50 automations; Enterprise allows 500 of each. Starter does not include triggers or automations. A trigger cannot fire more than once on the same ticket update, which prevents loops."
+  },
+  {
+    "document_id": "kb-ai-credits",
+    "title": "AI reply suggestions and credits",
+    "metadata": {"category": "billing"},
+    "content": "AI reply suggestions draft a response from your knowledge base and the ticket history. Each suggestion consumes one AI credit. Growth includes 500 AI credits per agent per month and Enterprise includes 2,000; Starter does not include AI features. Unused credits do not roll over. Additional credits can be bought in packs of 1,000 for $25 and never expire. Admins can see credit usage under Analytics > AI usage."
+  },
+  {
+    "document_id": "kb-mobile-app",
+    "title": "Mobile app",
+    "metadata": {"category": "support"},
+    "content": "The Acme Helpdesk mobile app is available for iOS 16 or later and Android 11 or later. Agents can view, reply to, and assign tickets and receive push notifications for new assignments. Live chat is not supported in the mobile app. If push notifications stop arriving, sign out and back in to re-register the device, and check that notifications are allowed in the operating system settings."
+  },
+  {
+    "document_id": "kb-audit-log",
+    "title": "Audit log",
+    "metadata": {"category": "technical"},
+    "content": "The audit log records admin actions such as changes to security settings, user roles, API tokens, and billing. It is available on Enterprise under Settings > Security > Audit log. Entries are retained for 2 years and can be filtered by actor, action, and date. The audit log can be streamed to a SIEM such as Splunk or Datadog through the audit log API. Agent actions on tickets are recorded in each ticket's event history instead."
+  },
+  {
+    "document_id": "kb-account-deletion",
+    "title": "Closing your account",
+    "metadata": {"category": "support"},
+    "content": "Only the account owner can close the account, from Settings > Account > Close account. Closing an account cancels the subscription at the end of the current billing period. All workspace data is permanently deleted 30 days after closure; export your data before closing if you need it. During those 30 days the owner can reopen the account by contacting support."
+  }
+]
